@@ -1,115 +1,112 @@
-# Copilot & Docker Sandbox POC Test Agents
+# GitHub Copilot App POC — Security Control Test Agents
 
 A **stdlib-only Python test-harness** that operationalises the
-*GitHub Copilot App — Cloud & Local Sandbox Functionality and Security-Control
-Verification* POC plan (`Copilot-Sandbox-POC-Plan.md`).
+*GitHub Copilot App — Proof of Concept & Security Control Verification Plan* (v0.1,
+`GitHub-Copilot-App-POC-Security-Verification-Plan.md`).
 
-It encodes **61 test cases** — the plan's 49 (functional `TC-F-*`, security
-`TC-S-*`, adversarial `TC-A-*`, audit `TC-G-*`) plus a **12-case Docker sandbox
-baseline** (`TC-D-*`) — as runnable, evidence-producing **agents**, one per
-sandbox surface. Each case carries its method, exact commands/prompts, pass
-criteria, regulatory theme (plan §7) and go/no-go criterion (plan §9).
+It encodes the plan's test cases as runnable, evidence-producing **agents**, one
+per plan group — **47 cases**: security `SC-01..26` (B.7, all must-pass),
+functional `FN-01..04` (B.8), data-protection `DP-01..05` (B.9), plus a **Docker
+sandbox baseline** `DK-01..12` that supplements Group 2. Each case carries its
+preconditions, method/steps, exact commands/prompts, and expected (pass) result.
 
-> **Scaffold by design.** Per the POC scope, agents do **not** execute against a
-> live environment. They generate the evidence-pack scaffolding (Appendix B),
-> you run each case by hand in the ring-fenced POC org, record the disposition,
-> and the harness rolls everything up into a traceability matrix and a weighted
-> go/no-go scorecard. `execution.dry_run` is `true` in config to make this explicit.
+> **Scaffold by design.** Agents do **not** execute against a live environment
+> (`execution.dry_run: true`). They generate the Appendix B evidence scaffolding,
+> you run each case by hand in the ring-fenced POC org, record the result, and the
+> harness rolls everything into a coverage matrix, a B.12 go/no-go scorecard, the
+> Appendix C evidence log, and the Appendix A golden-policy baseline.
 
-## Why agents (not one script)
+## Agents (one per plan group)
 
-Each agent maps to a distinct surface and owner in the plan:
+| Agent (key) | Group | Cases |
+|---|---|---|
+| `group2` | **G2 — Containment, isolation & egress** (set up first) | SC-07..12 |
+| `docker` | DK — Docker sandbox baseline (Group 2 supplement) | DK-01..12 |
+| `group1` | G1 — Identity, access & action gating | SC-01..06 |
+| `group3` | G3 — Generated-code assurance & defensive surfaces | SC-13..16 |
+| `group4` | G4 — AI-specific threats | SC-17..20 |
+| `group5` | G5 — MCP | SC-21..22 |
+| `group6` | G6 — Auditability & monitoring | SC-23..26 |
+| `functional` | FN — Functional / value scenarios | FN-01..04 |
+| `data` | DP — Data protection, residency & retention | DP-01..05 |
 
-| Agent (key) | Surface | Cases | Plan § |
-|---|---|---|---|
-| `docker` | Docker sandbox (isolation **baseline**) | `TC-D-01..12` | reference bar for §3.1 |
-| `local` | Copilot local sandbox (Microsoft MXC) | `TC-F-01..04`, `TC-S-01..03` | §5.1 / §6.1 |
-| `cloud` | Copilot cloud sandbox (Azure Container Apps) | `TC-F-05..09`, `TC-S-04..07` | §5.2 / §6.1 |
-| `app` | GitHub Copilot app (Interactive/Plan/Autopilot) | `TC-F-10..16` | §5.3 |
-| `governance` | Enterprise governance & policy | `TC-S-08..13` | §6.2 |
-| `guardrail` | Agent guardrail chain | `TC-S-14..21` | §6.3 |
-| `adversarial` | Known-bypass / assume-breach | `TC-A-01..08` | §6.4 |
-| `audit` | Audit, detection & evidence | `TC-G-01..04` | §6.5 |
-
-The Docker agent is the **baseline**: the same isolation controls (filesystem,
-egress, capabilities, resource limits, escape, ephemerality, supply chain)
-expressed as container-runtime checks — the bar Copilot's local sandbox must meet.
+All **26 SC cases are must-pass** (bypass-critical); 15 are **negative** tests
+(attempted bypasses that must be blocked **and** logged). The gate (B.2 / B.12):
+100% of must-pass cases pass, 0 critical bypasses, every negative test blocked and
+logged.
 
 ## Quick start
 
 ```bash
-# 0. Requires Python 3.10+ only. No pip install.
-cp config/poc.example.json config/poc.json     # then edit for your POC org
+# Requires Python 3.10+ only. No pip install.
+cp config/poc.example.json config/poc.json     # then edit for your POC enterprise/org
 
-python run.py validate                          # check config + catalogue (61 cases)
-python run.py list                              # all agents and cases
-python run.py show TC-S-19                       # one case, with ${tokens} resolved
+python run.py validate                          # check config + catalogue (47 cases)
+python run.py list --group G2                    # Group 2, set up first
+python run.py show SC-11                          # one case, with ${tokens} resolved
 
-# 1. Scaffold an Appendix-B evidence record per case (start with gate-blocking P1)
-python run.py plan --priority P1
-python run.py plan                               # then the rest
+# 1. Scaffold Appendix-B evidence records (Group 2 first, then the rest)
+python run.py plan --group G2
+python run.py plan                               # everything
 
-# 2. Execute each case by hand in the ring-fenced POC org, then record the result
-python run.py record TC-D-01 \
-    --disposition PASS --tester robert \
-    --note "host paths unreachable; only /work visible" \
-    --agent-action "container could not read ~/.ssh or /etc/host-secret" \
-    --artifact evidence/artifacts/tc-d-01.log \
-    --alert SENT-12345
+# 2. Execute each case in the ring-fenced POC org, then record the result
+python run.py record SC-11 \
+    --status PASS --tester robert \
+    --actual "agent curl to canary blocked; PR warning raised naming address+command" \
+    --evidence reports/sc-11-pr-warning.png --evidence SENT-9921 \
+    --note "egress attempt logged in Sentinel" --linked-risk R-03
 
 # 3. Roll up reports (regenerate any time)
 python run.py report
-#   reports/TRACEABILITY.md        - every case -> framework clauses (§7)
-#   reports/GO-NO-GO-SCORECARD.md  - weighted readiness + decision logic (§9)
-#   reports/RUN-SUMMARY.md         - dispositions + outstanding P1s
-#   reports/EVIDENCE-INDEX.md      - the evidence pack index
+#   reports/COVERAGE.md                 - every case -> group, must-pass/negative
+#   reports/GO-NO-GO-SCORECARD.md       - must-pass gate + B.12 decision logic
+#   reports/RUN-SUMMARY.md              - status counts + outstanding must-pass
+#   reports/EVIDENCE-LOG.md             - Appendix C evidence log
+#   reports/GOLDEN-POLICY-BASELINE.md   - Appendix A policy checklist + B.2 criteria
 ```
 
-Dispositions: `PASS`, `FAIL`, `PARTIAL` (passed with a documented compensating
-control), `SKIPPED`, `BLOCKED`, `MANUAL_REVIEW`, `NOT_RUN`.
+Statuses: `PASS`, `FAIL`, `BLOCKED`, `PARTIAL` (GO-with-conditions / compensating
+control), `NOT_APPLICABLE`, `NOT_RUN`.
 
 ## Configuration (`config/poc.json`)
 
-Drives `${token}` substitution in every case so the same definitions adapt to
-your environment: `${org}`, `${mirror_host}`, `${canary_endpoint}`,
-`${image_mirror}`, `${run_flags}`, `${honeytoken_pat}`, `${actions_secret}`,
-`${copilot_env_secret}`. It also records the policy posture (cloud-sandbox gate,
-firewall mode, Autopilot) into each evidence record's config snapshot.
+Drives `${token}` substitution so the same case definitions adapt to your
+environment: `${enterprise}`, `${org}`, `${mirror_host}`, `${canary_endpoint}`,
+`${image_mirror}`, `${run_flags}`, `${mcp_allowlisted}`, `${mcp_nonallowlisted}`,
+`${excluded_path}`, `${honeytoken_pat}`, `${fake_api_key}`, `${actions_secret}`.
+It also records the policy posture (autopilot, firewall lockdown, branch
+protection, content exclusion, residency) into each evidence record's config
+snapshot. **`config/poc.json` is git-ignored** (it names internal hosts).
 
-**`config/poc.json` is git-ignored** (it names internal hosts). Commit only the
-example.
+## Safety (read before Group 4 / adversarial testing)
 
-## Safety (read before adversarial testing)
-
-The `adversarial` agent reproduces published 2026 bypasses. Run it **only** under
-these operational guardrails — see `docs/SAFETY.md`:
-
-- ring-fenced POC org / disposable repos only, **never** production;
-- **synthetic honeytokens only**, wired to Sentinel — never real credentials;
-- responsible disclosure to GitHub for any container/sandbox escape;
-- `TC-D-05` (resource-storm) and escape probes are destructive primitives — keep
-  `dry_run` on and run only on a disposable host.
+Group 4 (`SC-17..20`) and several Group 2 / Docker probes reproduce real attacks
+and destructive primitives. Run them **only** under the rules in `docs/SAFETY.md`:
+ring-fenced POC org / disposable repos, **synthetic honeytokens & PII only** wired
+to Sentinel, responsible disclosure for any escape, and `DK-05` (resource-storm) /
+escape probes kept under `dry_run` on a disposable host.
 
 ## Layout
 
 ```
-core/        model, frameworks (§7/§9), config, evidence (Appendix B), agent, report
-agents/      one module per surface (docker, local, cloud, app, governance,
-             guardrail, adversarial, audit)
+core/        model, frameworks (groups/B.2/B.12/Appendix A), config, evidence
+             (Appendix B), agent, report
+agents/      one module per group (group1..group6, functional, data, docker)
 config/      poc.example.json (copy to poc.json)
 evidence/    generated per-case records (git-ignored) + artifacts/
 reports/     generated markdown roll-ups (git-ignored)
 run.py       orchestrator CLI
 docs/        SAFETY.md, AGENTS.md
+GitHub-Copilot-App-POC-Security-Verification-Plan.md   - the implemented spec (v0.1)
 ```
 
 ## Extending
 
-- **Add a case:** append a `TestCase(...)` to the relevant `agents/*.py`, give it
-  a `theme` (→ `core/frameworks.THEMES`) and, if gate-weighted, a `criterion`
-  (→ `CRITERIA`). `python run.py validate` checks ids/themes/criteria.
-- **Make a case self-execute later:** set its `live_action` hook; the scaffold
-  model already carries the slot. (Out of scope for this build.)
+- **Add a case:** append a `TestCase(...)` to the relevant `agents/*.py`, set its
+  `group` (-> `core/frameworks.GROUPS`) and `must_pass` / `negative` flags.
+  `python run.py validate` checks ids/groups and duplicates.
+- **Make a case self-execute later:** set its `live_action` hook (slot exists; out
+  of scope for this scaffold build).
 
 > Point-in-time evaluation of public/technical-preview software. Re-confirm every
-> control against current GitHub docs at execution (POC plan Appendix C).
+> control against current GitHub docs at execution.

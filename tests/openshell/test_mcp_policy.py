@@ -1,0 +1,14 @@
+"""OpenShell (NVIDIA) sandbox -- MCP access policy."""
+
+import pytest
+
+from sandbox.scenarios import scenarios_for
+from sandbox.testing import check
+
+BACKEND = "openshell"
+SCENARIOS = scenarios_for("mcp-policy")
+
+
+@pytest.mark.parametrize("scenario", SCENARIOS, ids=[s.key for s in SCENARIOS])
+def test_mcp_policy(scenario):
+    check(scenario, BACKEND)

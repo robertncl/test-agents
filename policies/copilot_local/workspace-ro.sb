@@ -1,0 +1,12 @@
+;; Seatbelt-NATIVE policy for the Copilot local sandbox (macOS): read-only
+;; workspace, no network. {workspace} is substituted at runtime.
+(version 1)
+(deny default)
+(allow process-fork)
+(allow process-exec)
+(allow sysctl-read)
+(allow file-read* (subpath "/usr") (subpath "/bin") (subpath "/System"))
+(allow file-read* (subpath "{workspace}"))
+(allow file-write* (subpath "/private/tmp") (subpath "/tmp"))
+;; workspace is read-only: no file-write* rule for it.
+;; network: denied by the default-deny above.

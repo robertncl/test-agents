@@ -1,0 +1,21 @@
+# bubblewrap-NATIVE policy for the Copilot local sandbox (Linux): read-only
+# workspace, no network. {workspace} is substituted at runtime.
+--unshare-user
+--unshare-pid
+--unshare-ipc
+--unshare-uts
+--unshare-net
+--die-with-parent
+--new-session
+--ro-bind /usr /usr
+--ro-bind-try /bin /bin
+--ro-bind-try /sbin /sbin
+--ro-bind-try /lib /lib
+--ro-bind-try /lib64 /lib64
+--ro-bind-try /etc/alternatives /etc/alternatives
+--proc /proc
+--dev /dev
+--tmpfs /tmp
+--setenv HOME /tmp
+--ro-bind {workspace} /workspace
+--chdir /workspace

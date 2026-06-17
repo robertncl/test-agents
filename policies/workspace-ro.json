@@ -1,0 +1,21 @@
+{
+  "name": "workspace-ro",
+  "description": "Read-only review policy: the agent may read the workspace but not modify it. Used by the read-only filesystem-policy scenario.",
+  "filesystem": {
+    "workspace": "/workspace",
+    "workspace_writable": false,
+    "read_paths": [],
+    "write_paths": [],
+    "default_deny": true
+  },
+  "network": {
+    "default_deny": true,
+    "allow_hosts": [],
+    "allow_ports": [443]
+  },
+  "mcp": {
+    "default_deny": true,
+    "allow_servers": [],
+    "servers": {}
+  }
+}

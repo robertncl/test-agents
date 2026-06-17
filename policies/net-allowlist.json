@@ -1,0 +1,26 @@
+{
+  "name": "net-allowlist",
+  "description": "Egress allowlist policy: the agent may reach only the listed hosts (e.g. its model/API endpoints), everything else is denied. Requires a backend that enforces per-host egress filtering (network-allowlist capability).",
+  "filesystem": {
+    "workspace": "/workspace",
+    "workspace_writable": true,
+    "read_paths": [],
+    "write_paths": [],
+    "default_deny": true
+  },
+  "network": {
+    "default_deny": true,
+    "allow_hosts": ["example.com"],
+    "allow_ports": [80, 443]
+  },
+  "mcp": {
+    "default_deny": true,
+    "allow_servers": ["github"],
+    "servers": {
+      "github": {
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-github"]
+      }
+    }
+  }
+}

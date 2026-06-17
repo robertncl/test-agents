@@ -1,0 +1,31 @@
+# OpenShell-NATIVE policy: egress allowlist. Only the listed endpoints are
+# reachable (enforced by the gateway); everything else is denied. The endpoint
+# syntax mirrors `openshell policy update --add-endpoint`:
+#   <host>:<port>:<mode>:<protocol>:<action>
+version: 1
+filesystem_policy:
+  include_workdir: true
+  read_only:
+    - /usr
+    - /lib
+    - /lib64
+    - /bin
+    - /sbin
+    - /etc
+  read_write:
+    - "{workdir}"
+    - /tmp
+landlock:
+  compatibility: best_effort
+process:
+  run_as_user: sandbox
+  run_as_group: sandbox
+network_policy:
+  default: deny
+  endpoints:
+    - example.com:80:read-only:rest:enforce
+    - example.com:443:read-only:rest:enforce
+mcp_policy:
+  default: deny
+  allow:
+    - github

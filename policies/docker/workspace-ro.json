@@ -1,0 +1,21 @@
+{
+  "_comment": "Docker-NATIVE policy: read-only workspace. Keys map 1:1 to `docker run` flags.",
+  "network_mode": "none",
+  "read_only": true,
+  "user": "1000:1000",
+  "cap_drop": ["ALL"],
+  "security_opt": ["no-new-privileges"],
+  "pids_limit": 256,
+  "mem_limit": "512m",
+  "tmpfs": {
+    "/tmp": "rw,size=64m",
+    "/home/sandbox": "rw,size=16m"
+  },
+  "environment": {
+    "HOME": "/home/sandbox"
+  },
+  "workspace": {
+    "target": "/workspace",
+    "read_only": true
+  }
+}

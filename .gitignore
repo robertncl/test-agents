@@ -1,0 +1,8 @@
+# Test-run artifacts (results / evidence logs)
+out/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/

@@ -1,0 +1,19 @@
+{
+  "$comment": "Stand-in for the centrally-pushed (e.g. Intune) local-sandbox policy. Baked into the image root-owned and read-only so a non-root sandbox user cannot tamper with it (see SC-08).",
+  "policyId": "AIA-LOCAL-SANDBOX-BASELINE",
+  "version": 1,
+  "enabled": true,
+  "userCanDisable": false,
+  "filesystem": {
+    "writableRoots": ["/workspace"],
+    "denyReadOutsideProject": true
+  },
+  "network": {
+    "defaultEgress": "deny",
+    "allowlist": ["github.com", "api.github.com", "objects.githubusercontent.com"]
+  },
+  "privileges": {
+    "allowPrivilegeEscalation": false,
+    "dropAllCapabilities": true
+  }
+}

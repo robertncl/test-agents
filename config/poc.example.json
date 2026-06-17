@@ -1,0 +1,58 @@
+{
+  "_comment": "Copy to config/poc.json and edit for your ring-fenced POC org. Never put real secrets here.",
+  "poc": {
+    "org": "aia-copilot-poc",
+    "enterprise": "aia",
+    "classification": "Internal - POC - non-production",
+    "repos": [
+      "web-backend-archetype",
+      "iac-databricks-adf-archetype",
+      "liquibase-dbchange-archetype"
+    ]
+  },
+  "endpoints": {
+    "mdm": "Microsoft Intune",
+    "managed_os": ["macos", "windows", "linux"]
+  },
+  "network": {
+    "mirror_host": "nexus.poc.aia.internal",
+    "allowlist": ["github.com", "api.github.com", "nexus.poc.aia.internal"],
+    "canary_endpoint": "https://canary.poc.aia.example/collect"
+  },
+  "secrets": {
+    "policy": "synthetic honeytokens only - NEVER real credentials; wire honeytokens to Sentinel alerts",
+    "honeytokens": {
+      "github_pat": "ghs_HONEYTOKEN_PLACEHOLDER_0000000000000000",
+      "actions_secret": "HONEYTOKEN_ACTIONS_SECRET",
+      "copilot_env_secret": "HONEYTOKEN_COPILOT_ENV_SECRET"
+    }
+  },
+  "siem": {
+    "platform": "Microsoft Sentinel",
+    "workspace": "poc-sentinel",
+    "ingest": ["github-audit", "github-agentic-audit", "egress-flow-logs"]
+  },
+  "policies": {
+    "cloud_sandbox_access": false,
+    "agent_firewall": "enabled",
+    "firewall_mode": "org-locked",
+    "autopilot": "disabled"
+  },
+  "docker": {
+    "image_mirror": "nexus.poc.aia.internal/library",
+    "default_run_flags": [
+      "--rm",
+      "--network", "none",
+      "--cap-drop", "ALL",
+      "--security-opt", "no-new-privileges",
+      "--read-only",
+      "--user", "10001:10001",
+      "--pids-limit", "256",
+      "--memory", "1g",
+      "--cpus", "1"
+    ]
+  },
+  "execution": {
+    "dry_run": true
+  }
+}

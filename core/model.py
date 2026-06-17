@@ -1,4 +1,4 @@
-"""Value objects shared by every test agent."""
+"""Value objects shared by every test agent (GitHub Copilot App POC, plan v0.1)."""
 
 from __future__ import annotations
 
@@ -7,57 +7,52 @@ from enum import Enum
 from typing import Callable, Optional
 
 
-class Priority(str, Enum):
-    """POC plan priority: P1 = gate-blocking, P2 = important, P3 = nice-to-have."""
-
-    P1 = "P1"
-    P2 = "P2"
-    P3 = "P3"
-
-
 class Disposition(str, Enum):
-    """Outcome of a test case (Appendix B requires a pass/fail disposition)."""
+    """Outcome of a test case.
+
+    Appendix B template records Status as Pass/Fail/Blocked; PARTIAL captures
+    'GO WITH CONDITIONS' (passed only with a documented compensating control),
+    and NOT_RUN is the default for a freshly scaffolded record.
+    """
 
     PASS = "PASS"
     FAIL = "FAIL"
-    PARTIAL = "PARTIAL"          # passed with a documented gap / compensating control
-    SKIPPED = "SKIPPED"          # not applicable on this surface/run
-    BLOCKED = "BLOCKED"          # could not execute (env/preview unavailable)
-    MANUAL_REVIEW = "MANUAL_REVIEW"  # evidence captured, awaiting human disposition
-    NOT_RUN = "NOT_RUN"          # default for a freshly scaffolded record
+    BLOCKED = "BLOCKED"
+    PARTIAL = "PARTIAL"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
+    NOT_RUN = "NOT_RUN"
 
 
-# Convenience for callers that want the set of failing-ish states.
-NEGATIVE_DISPOSITIONS = {Disposition.FAIL, Disposition.BLOCKED}
+# Dispositions that count as "executed" for coverage maths.
 RUN_DISPOSITIONS = {
     Disposition.PASS,
     Disposition.FAIL,
+    Disposition.BLOCKED,
     Disposition.PARTIAL,
-    Disposition.MANUAL_REVIEW,
 }
+# Dispositions that block a GO for a must-pass case.
+BLOCKING_DISPOSITIONS = {Disposition.FAIL, Disposition.BLOCKED}
 
 
 @dataclass
 class TestCase:
-    """A single POC test case, encoded as data.
+    """A single POC test case (B.7 SC-*, B.8 FN-*, B.9 DP-*, Docker DK-*).
 
-    ``live_action`` is an optional hook ``(RunContext) -> Disposition`` for teams
-    that later want a case to execute itself. It is ``None`` for every case in
-    this scaffold build - execution is manual and recorded via ``run.py record``.
+    Field names mirror the Appendix B test-case template:
+    control-under-test, preconditions, steps (method), expected (pass) result.
+    ``must_pass`` marks the bypass-critical cases (the gate per B.2 / B.12).
+    ``live_action`` is an unused hook for a future self-executing case.
     """
 
     id: str
-    priority: Priority
-    title: str
-    control: str                      # control under test / objective
-    pass_criteria: str
-    method: list[str] = field(default_factory=list)
-    commands: list[str] = field(default_factory=list)  # concrete commands/prompts
-    theme: str = ""                   # regulatory theme key (see frameworks.THEMES)
-    criterion: str = ""               # go/no-go criterion key (see frameworks.CRITERIA)
-    threat: str = ""                  # research-derived threat (adversarial cases)
+    group: str                         # group key (see frameworks.GROUPS)
+    control: str                       # control under test
+    expected: str                      # expected (pass) result
+    method: list[str] = field(default_factory=list)        # steps
+    preconditions: list[str] = field(default_factory=list)
+    commands: list[str] = field(default_factory=list)      # concrete commands/prompts
+    must_pass: bool = False            # bypass-critical (B.7 "Must-pass")
+    negative: bool = False             # a bypass attempt that must be blocked AND logged
+    measure: str = ""                  # functional cases (B.8 measure)
     notes: str = ""
     live_action: Optional[Callable] = None
-
-    def is_gate_blocking(self) -> bool:
-        return self.priority == Priority.P1

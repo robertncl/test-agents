@@ -1,21 +1,23 @@
 #!/usr/bin/env python3
-"""Orchestrator for the Copilot / Docker sandbox POC test agents.
+"""Orchestrator for the GitHub Copilot App POC test agents (plan v0.1).
 
 Stdlib only - no `pip install` required. Subcommands:
 
-  list                       list agents and their test cases
-  show   <TEST-ID>           print a single test case (method, commands, criteria)
-  plan   [--agent K] [...]   scaffold an evidence record per case into evidence/
-  record <TEST-ID> [...]     fill in a case's evidence (disposition, tester, ...)
-  report                     (re)generate traceability + scorecard + summary + index
-  validate                   sanity-check config and the test-case catalogue
+  list   [--agent K] [--group G]   list agents and test cases
+  show   <CASE-ID>                  print a single case (preconditions, steps, expected)
+  plan   [--agent K] [--group G]    scaffold an Appendix-B evidence record per case
+         [--must-pass] [--force]
+  record <CASE-ID> [...]           fill in a case's evidence (status, tester, ...)
+  report                           (re)generate coverage + scorecard + evidence-log + ...
+  validate                         sanity-check config and the case catalogue
 
 Examples:
-  python run.py list
-  python run.py show TC-S-19
-  python run.py plan --priority P1
-  python run.py record TC-D-01 --disposition PASS --tester robert \\
-      --note "host paths unreachable" --artifact evidence/artifacts/tc-d-01.log
+  python run.py list --group G2
+  python run.py plan --group G2            # set up Group 2 first
+  python run.py show SC-11
+  python run.py record SC-11 --status PASS --tester robert \\
+      --actual "egress to canary blocked; PR warning raised" \\
+      --evidence reports/sc-11.png --evidence SENT-9921 --note "logged in Sentinel"
   python run.py report
 """
 
@@ -29,66 +31,75 @@ from agents import ALL_AGENTS, find_case, get_agent
 from core import config as cfg_mod
 from core import evidence as ev
 from core import report as rpt
+from core.frameworks import GROUPS
 from core.model import Disposition
 
 EVIDENCE_DIR = os.environ.get("POC_EVIDENCE_DIR", "evidence")
 REPORT_DIR = os.environ.get("POC_REPORT_DIR", "reports")
 
 
-# --------------------------------------------------------------------------- #
-# helpers
-# --------------------------------------------------------------------------- #
 def _load_cfg(args) -> dict:
     return cfg_mod.load_config(getattr(args, "config", None))
 
 
-def _selected_agents(agent_key: str | None):
-    if not agent_key:
-        return ALL_AGENTS
-    a = get_agent(agent_key)
-    if not a:
-        sys.exit(f"Unknown agent '{agent_key}'. Known: {[x.key for x in ALL_AGENTS]}")
-    return [a]
+def _selected_agents(args):
+    agents = ALL_AGENTS
+    if getattr(args, "agent", None):
+        a = get_agent(args.agent)
+        if not a:
+            sys.exit(f"Unknown agent '{args.agent}'. Known: {[x.key for x in ALL_AGENTS]}")
+        agents = [a]
+    if getattr(args, "group", None):
+        agents = [a for a in agents if a.group == args.group]
+        if not agents:
+            sys.exit(f"No agent in group '{args.group}'. Known groups: {list(GROUPS)}")
+    return agents
 
 
-# --------------------------------------------------------------------------- #
-# subcommands
-# --------------------------------------------------------------------------- #
 def cmd_list(args) -> None:
-    total = 0
-    for a in _selected_agents(args.agent):
-        c = a.counts_by_priority()
+    total = mp = 0
+    for a in _selected_agents(args):
         n = len(a.test_cases)
         total += n
-        print(f"\n[{a.key}] {a.name}  ({n} cases: "
-              f"P1={c['P1']} P2={c['P2']} P3={c['P3']})")
-        print(f"    surface: {a.surface}")
+        mp += a.must_pass_count()
+        print(f"\n[{a.key}] {a.name}  ({n} cases, {a.must_pass_count()} must-pass)")
         for tc in a.test_cases:
-            print(f"    {tc.id:<9} {tc.priority.value}  {tc.title}")
-    print(f"\nTotal test cases: {total}")
+            flags = []
+            if tc.must_pass:
+                flags.append("must-pass")
+            if tc.negative:
+                flags.append("negative")
+            tag = f"  ({', '.join(flags)})" if flags else ""
+            print(f"    {tc.id:<7} {tc.control}{tag}")
+    print(f"\nTotal: {total} cases ({mp} must-pass).")
 
 
 def cmd_show(args) -> None:
-    found = find_case(args.test_id)
+    found = find_case(args.case_id)
     if not found:
-        sys.exit(f"No such test case: {args.test_id}")
+        sys.exit(f"No such case: {args.case_id}")
     agent, tc = found
     cfg = _load_cfg(args)
     tok = cfg_mod.tokens(cfg)
     sub = cfg_mod.substitute
-    print(f"{tc.id}  [{tc.priority.value}]  {tc.title}")
-    print(f"agent     : {agent.key} ({agent.surface})")
-    print(f"control   : {tc.control}")
-    if tc.threat:
-        print(f"threat    : {tc.threat}")
-    print(f"theme     : {tc.theme}    criterion: {tc.criterion or '-'}")
-    print("method    :")
+    print(f"{tc.id}  {tc.control}")
+    print(f"agent     : {agent.key}  ({agent.name})")
+    print(f"group     : {tc.group} - {GROUPS.get(tc.group, {}).get('label', '-')}")
+    print(f"must-pass : {tc.must_pass}    negative: {tc.negative}")
+    if tc.preconditions:
+        print("precond.  :")
+        for p in tc.preconditions:
+            print(f"  - {sub(p, tok)}")
+    print("steps     :")
     for m in tc.method:
         print(f"  - {sub(m, tok)}")
-    print("commands  :")
-    for c in tc.commands:
-        print(f"  $ {sub(c, tok)}")
-    print(f"pass      : {sub(tc.pass_criteria, tok)}")
+    if tc.commands:
+        print("commands  :")
+        for c in tc.commands:
+            print(f"  $ {sub(c, tok)}")
+    print(f"expected  : {sub(tc.expected, tok)}")
+    if tc.measure:
+        print(f"measure   : {tc.measure}")
     if tc.notes:
         print(f"notes     : {tc.notes}")
 
@@ -99,62 +110,60 @@ def cmd_plan(args) -> None:
     snap = cfg_mod.config_snapshot(cfg)
     tok = cfg_mod.tokens(cfg)
     created = skipped = 0
-    for a in _selected_agents(args.agent):
-        for tc in a.select(priorities=args.priority):
+    for a in _selected_agents(args):
+        for tc in a.select(must_pass_only=args.must_pass):
             path = ev.record_path(EVIDENCE_DIR, tc.id)
             if os.path.exists(path) and not args.force:
                 skipped += 1
                 continue
-            rec = ev.build_record(tc, a.surface, env, snap, tok)
-            ev.save_record(EVIDENCE_DIR, rec)
+            ev.save_record(EVIDENCE_DIR, ev.build_record(tc, env, snap, tok))
             created += 1
     print(f"Scaffolded {created} evidence record(s) into {EVIDENCE_DIR}/ "
           f"({skipped} preserved; use --force to regenerate).")
     if created:
         print("Next: execute each case in the ring-fenced POC org, then "
-              "`python run.py record <TEST-ID> --disposition ...`.")
+              "`python run.py record <CASE-ID> --status ...`.")
 
 
 def cmd_record(args) -> None:
-    rec = ev.load_record(EVIDENCE_DIR, args.test_id)
+    rec = ev.load_record(EVIDENCE_DIR, args.case_id)
     if rec is None:
-        found = find_case(args.test_id)
+        found = find_case(args.case_id)
         if not found:
-            sys.exit(f"No such test case: {args.test_id}")
+            sys.exit(f"No such case: {args.case_id}")
         agent, tc = found
         cfg = _load_cfg(args)
-        rec = ev.build_record(
-            tc, agent.surface, cfg_mod.env_snapshot(cfg),
-            cfg_mod.config_snapshot(cfg), cfg_mod.tokens(cfg),
-        )
-    if args.disposition:
+        rec = ev.build_record(tc, cfg_mod.env_snapshot(cfg),
+                              cfg_mod.config_snapshot(cfg), cfg_mod.tokens(cfg))
+    if args.status:
         valid = [d.value for d in Disposition]
-        if args.disposition not in valid:
-            sys.exit(f"Invalid disposition '{args.disposition}'. Valid: {valid}")
-        rec.disposition = args.disposition
+        if args.status not in valid:
+            sys.exit(f"Invalid status '{args.status}'. Valid: {valid}")
+        rec.status = args.status
     if args.tester:
         rec.tester = args.tester
+    if args.actual:
+        rec.actual_result = args.actual
     if args.note:
         rec.notes = (rec.notes + "\n" if rec.notes else "") + args.note
-    if args.agent_action:
-        rec.agent_action = args.agent_action
-    for art in args.artifact or []:
-        rec.artifacts.append(art)
-    for alert in args.alert or []:
-        rec.sentinel_alert_ids.append(alert)
+    if args.linked_risk:
+        rec.linked_risk = args.linked_risk
+    for e in args.evidence or []:
+        rec.evidence_refs.append(e)
     rec.timestamp = ev.utc_now()
     path = ev.save_record(EVIDENCE_DIR, rec)
-    print(f"Updated {path}  ->  disposition={rec.disposition} tester={rec.tester or '-'}")
+    print(f"Updated {path}  ->  status={rec.status} tester={rec.tester or '-'}")
 
 
 def cmd_report(args) -> None:
     records = ev.load_all_records(EVIDENCE_DIR)
     os.makedirs(REPORT_DIR, exist_ok=True)
     outputs = {
-        "TRACEABILITY.md": rpt.traceability_matrix(ALL_AGENTS),
+        "COVERAGE.md": rpt.coverage_matrix(ALL_AGENTS),
         "GO-NO-GO-SCORECARD.md": rpt.go_no_go_scorecard(ALL_AGENTS, records),
         "RUN-SUMMARY.md": rpt.run_summary(ALL_AGENTS, records),
-        "EVIDENCE-INDEX.md": rpt.evidence_index(records),
+        "EVIDENCE-LOG.md": rpt.evidence_log(records),
+        "GOLDEN-POLICY-BASELINE.md": rpt.golden_policy_baseline(),
     }
     for name, body in outputs.items():
         with open(os.path.join(REPORT_DIR, name), "w", encoding="utf-8") as f:
@@ -168,7 +177,6 @@ def cmd_report(args) -> None:
 
 def cmd_validate(args) -> None:
     problems = []
-    # config
     try:
         cfg = _load_cfg(args)
         print(f"config: OK ({cfg.get('_source')})")
@@ -179,19 +187,19 @@ def cmd_validate(args) -> None:
             problems.append("secrets.policy should state honeytoken-only usage.")
     except FileNotFoundError as e:
         problems.append(str(e))
-    # catalogue: unique ids, known criteria/themes
-    from core.frameworks import CRITERIA, THEMES
     seen = {}
     for a in ALL_AGENTS:
+        if a.group not in GROUPS:
+            problems.append(f"Agent {a.key}: unknown group '{a.group}'.")
         for tc in a.test_cases:
             if tc.id in seen:
-                problems.append(f"Duplicate test id {tc.id} ({a.key} & {seen[tc.id]}).")
+                problems.append(f"Duplicate case id {tc.id} ({a.key} & {seen[tc.id]}).")
             seen[tc.id] = a.key
-            if tc.theme and tc.theme not in THEMES:
-                problems.append(f"{tc.id}: unknown theme '{tc.theme}'.")
-            if tc.criterion and tc.criterion not in CRITERIA:
-                problems.append(f"{tc.id}: unknown criterion '{tc.criterion}'.")
-    print(f"catalogue: {len(seen)} unique test cases across {len(ALL_AGENTS)} agents.")
+            if tc.group not in GROUPS:
+                problems.append(f"{tc.id}: unknown group '{tc.group}'.")
+    mp = sum(a.must_pass_count() for a in ALL_AGENTS)
+    print(f"catalogue: {len(seen)} unique cases across {len(ALL_AGENTS)} agents "
+          f"({mp} must-pass).")
     if problems:
         print("\nISSUES:")
         for p in problems:
@@ -200,41 +208,42 @@ def cmd_validate(args) -> None:
     print("validate: OK")
 
 
-# --------------------------------------------------------------------------- #
-# arg parsing
-# --------------------------------------------------------------------------- #
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="run.py",
-        description="POC test agents for Docker & GitHub Copilot local/cloud sandboxes.",
+        description="POC test agents for the GitHub Copilot App (plan v0.1).",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
     p.add_argument("--config", help="path to POC config JSON (default: config/poc.json|example).")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    s = sub.add_parser("list", help="list agents and test cases")
-    s.add_argument("--agent", help="restrict to one agent key")
+    s = sub.add_parser("list", help="list agents and cases")
+    s.add_argument("--agent")
+    s.add_argument("--group", help="group key, e.g. G2")
     s.set_defaults(func=cmd_list)
 
-    s = sub.add_parser("show", help="print one test case")
-    s.add_argument("test_id")
+    s = sub.add_parser("show", help="print one case")
+    s.add_argument("case_id")
     s.set_defaults(func=cmd_show)
 
     s = sub.add_parser("plan", help="scaffold evidence records")
-    s.add_argument("--agent", help="restrict to one agent key")
-    s.add_argument("--priority", nargs="*", choices=["P1", "P2", "P3"], help="filter priorities")
+    s.add_argument("--agent")
+    s.add_argument("--group", help="group key, e.g. G2")
+    s.add_argument("--must-pass", action="store_true", dest="must_pass",
+                   help="only must-pass cases")
     s.add_argument("--force", action="store_true", help="overwrite existing records")
     s.set_defaults(func=cmd_plan)
 
     s = sub.add_parser("record", help="fill in a case's evidence")
-    s.add_argument("test_id")
-    s.add_argument("--disposition", help="PASS|FAIL|PARTIAL|SKIPPED|BLOCKED|MANUAL_REVIEW|NOT_RUN")
+    s.add_argument("case_id")
+    s.add_argument("--status", help="PASS|FAIL|BLOCKED|PARTIAL|NOT_APPLICABLE|NOT_RUN")
     s.add_argument("--tester")
+    s.add_argument("--actual", help="actual result observed")
     s.add_argument("--note")
-    s.add_argument("--agent-action", dest="agent_action")
-    s.add_argument("--artifact", action="append", help="path to a captured artifact (repeatable)")
-    s.add_argument("--alert", action="append", help="Sentinel alert ID (repeatable)")
+    s.add_argument("--linked-risk", dest="linked_risk", help="risk-register ID (Appendix C)")
+    s.add_argument("--evidence", action="append",
+                   help="evidence ref: screenshot / session-log ID / audit-event ID / SIEM alert (repeatable)")
     s.set_defaults(func=cmd_record)
 
     s = sub.add_parser("report", help="(re)generate reports")

@@ -1,9 +1,8 @@
-"""Appendix B evidence records: build, load, save.
+"""Evidence records aligned to the Appendix B test-case template + Appendix C log.
 
-Appendix B (Evidence Capture Standard) requires, for every case:
-environment + config snapshot, exact command/prompt, agent action and tool calls,
-artifacts (screenshots/log excerpts), Sentinel alert IDs, pass/fail disposition,
-tester, timestamp. This module is the canonical representation of that record.
+Appendix B template fields: ID, Group, Control under test, Preconditions, Steps,
+Expected (pass) result, Actual result, Status, Evidence refs (screenshot /
+session-log ID / audit-event ID / SIEM alert), Notes / residual risk, Tester / date.
 """
 
 from __future__ import annotations
@@ -14,7 +13,7 @@ import os
 from dataclasses import asdict, dataclass, field
 
 from .config import substitute
-from .frameworks import THEMES
+from .frameworks import group_label
 from .model import Disposition, TestCase
 
 
@@ -24,59 +23,51 @@ def utc_now() -> str:
 
 @dataclass
 class EvidenceRecord:
-    # --- identity / definition (copied from the TestCase) ---
+    # --- definition (copied from the TestCase) ---
     test_id: str
-    title: str = ""
-    priority: str = ""
-    surface: str = ""
-    control: str = ""
-    pass_criteria: str = ""
-    method: list = field(default_factory=list)
+    group: str = ""
+    group_label: str = ""
+    control: str = ""                       # control under test
+    preconditions: list = field(default_factory=list)
+    method: list = field(default_factory=list)            # steps
     command_or_prompt: list = field(default_factory=list)
-    threat: str = ""
-    theme: str = ""
-    criterion: str = ""
-    frameworks: dict = field(default_factory=dict)
-    # --- Appendix B capture fields (filled in at execution) ---
+    expected: str = ""                      # expected (pass) result
+    must_pass: bool = False
+    negative: bool = False
+    measure: str = ""
+    # --- capture fields (filled in at execution) ---
     timestamp: str = ""
     tester: str = ""
     environment_snapshot: dict = field(default_factory=dict)
     config_snapshot: dict = field(default_factory=dict)
-    agent_action: str = ""
-    artifacts: list = field(default_factory=list)
-    sentinel_alert_ids: list = field(default_factory=list)
-    disposition: str = Disposition.NOT_RUN.value
-    notes: str = ""
+    actual_result: str = ""
+    status: str = Disposition.NOT_RUN.value
+    evidence_refs: list = field(default_factory=list)      # screenshots/session/audit/SIEM
+    linked_risk: str = ""                   # Appendix C: linked risk-register ID
+    notes: str = ""                         # notes / residual risk
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=2, sort_keys=False)
 
 
-def build_record(
-    tc: TestCase,
-    surface: str,
-    env: dict,
-    cfg_snapshot: dict,
-    tok: dict[str, str],
-) -> EvidenceRecord:
-    """Pre-populate an evidence record from a test-case definition."""
+def build_record(tc: TestCase, env: dict, cfg_snap: dict, tok: dict[str, str]) -> EvidenceRecord:
+    sub = lambda s: substitute(s, tok)  # noqa: E731
     return EvidenceRecord(
         test_id=tc.id,
-        title=tc.title,
-        priority=tc.priority.value,
-        surface=surface,
+        group=tc.group,
+        group_label=group_label(tc.group),
         control=tc.control,
-        pass_criteria=substitute(tc.pass_criteria, tok),
-        method=[substitute(m, tok) for m in tc.method],
-        command_or_prompt=[substitute(c, tok) for c in tc.commands],
-        threat=tc.threat,
-        theme=tc.theme,
-        criterion=tc.criterion,
-        frameworks=THEMES.get(tc.theme, {}),
+        preconditions=[sub(p) for p in tc.preconditions],
+        method=[sub(m) for m in tc.method],
+        command_or_prompt=[sub(c) for c in tc.commands],
+        expected=sub(tc.expected),
+        must_pass=tc.must_pass,
+        negative=tc.negative,
+        measure=tc.measure,
         environment_snapshot=env,
-        config_snapshot=cfg_snapshot,
+        config_snapshot=cfg_snap,
+        status=Disposition.NOT_RUN.value,
         notes=tc.notes,
-        disposition=Disposition.NOT_RUN.value,
     )
 
 
@@ -97,8 +88,7 @@ def load_record(evidence_dir: str, test_id: str) -> EvidenceRecord | None:
     if not os.path.exists(path):
         return None
     with open(path, encoding="utf-8") as f:
-        data = json.load(f)
-    return EvidenceRecord(**data)
+        return EvidenceRecord(**json.load(f))
 
 
 def load_all_records(evidence_dir: str) -> list[EvidenceRecord]:

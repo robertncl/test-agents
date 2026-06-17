@@ -1,42 +1,73 @@
 {
-  "_comment": "Copy to config/poc.json and edit for your ring-fenced POC org. Never put real secrets here.",
+  "_comment": "Copy to config/poc.json and edit for your ring-fenced POC enterprise/org. Never put real secrets here.",
   "poc": {
+    "enterprise": "aia-copilot-poc",
     "org": "aia-copilot-poc",
-    "enterprise": "aia",
     "classification": "Internal - POC - non-production",
-    "repos": [
-      "web-backend-archetype",
-      "iac-databricks-adf-archetype",
-      "liquibase-dbchange-archetype"
+    "pilot_repos": [
+      "greenfield-low-risk",
+      "brownfield-service",
+      "iac-repo"
     ]
+  },
+  "identity": {
+    "idp": "EMU + SSO",
+    "privilege_tiers": ["read", "write", "admin"]
   },
   "endpoints": {
     "mdm": "Microsoft Intune",
     "managed_os": ["macos", "windows", "linux"]
   },
   "network": {
+    "firewall": "enabled",
+    "firewall_change": "admin-only",
     "mirror_host": "nexus.poc.aia.internal",
     "allowlist": ["github.com", "api.github.com", "nexus.poc.aia.internal"],
     "canary_endpoint": "https://canary.poc.aia.example/collect"
   },
+  "mcp": {
+    "registry": "https://mcp-registry.poc.aia.internal",
+    "allowlist": ["github/github-mcp-server"],
+    "nonallowlisted_test_server": "https://unknown-mcp.poc.aia.example/sse"
+  },
+  "content_exclusion": {
+    "paths": ["secrets/**", "**/*.pem", "config/prod/**", "**/.env"]
+  },
+  "residency": {
+    "tenant_region": "Australia",
+    "inference_region_bound": false,
+    "dpa_note": "Repo data regionalised (AU/JP nearest); model inference/content filtering NOT region-bound; no MY/SG residency region."
+  },
+  "branch_protection": {
+    "required_reviews": 2,
+    "required_checks": ["CodeQL", "secret-scanning"],
+    "signed_commits": true,
+    "restrict_pushers": true,
+    "block_self_approval": true
+  },
   "secrets": {
-    "policy": "synthetic honeytokens only - NEVER real credentials; wire honeytokens to Sentinel alerts",
+    "policy": "synthetic honeytokens / synthetic PII only - NEVER real credentials; wire honeytokens to Sentinel alerts",
     "honeytokens": {
       "github_pat": "ghs_HONEYTOKEN_PLACEHOLDER_0000000000000000",
-      "actions_secret": "HONEYTOKEN_ACTIONS_SECRET",
-      "copilot_env_secret": "HONEYTOKEN_COPILOT_ENV_SECRET"
+      "fake_api_key": "AKIA_FAKE_EXAMPLE_KEY_0000",
+      "actions_secret": "HONEYTOKEN_ACTIONS_SECRET"
     }
   },
   "siem": {
     "platform": "Microsoft Sentinel",
     "workspace": "poc-sentinel",
-    "ingest": ["github-audit", "github-agentic-audit", "egress-flow-logs"]
+    "alerts": ["firewall-disabled", "autopilot-enabled", "mass-merge"]
+  },
+  "seeded_artifacts": {
+    "vuln_samples": ["sqli", "secret-in-code", "insecure-deps"],
+    "pii_synthetic": true,
+    "injection_payloads": ["html-comment-hidden", "readme-embedded"]
   },
   "policies": {
-    "cloud_sandbox_access": false,
-    "agent_firewall": "enabled",
-    "firewall_mode": "org-locked",
-    "autopilot": "disabled"
+    "autopilot": "disabled",
+    "cloud_sandbox_access": true,
+    "generated_code_validation": "locked-on",
+    "agent_firewall": "locked-on"
   },
   "docker": {
     "image_mirror": "nexus.poc.aia.internal/library",

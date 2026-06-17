@@ -1,8 +1,9 @@
-"""Test agents, one per sandbox surface in the POC plan.
+"""Test agents, one per plan-v0.1 group (GitHub Copilot App POC).
 
 Importing this package exposes:
-- ``ALL_AGENTS``   - ordered list of every Agent
-- ``find_case``    - locate (agent, testcase) by test id across all agents
+- ``ALL_AGENTS``  - ordered list of every Agent (Group 2 first, per setup priority)
+- ``get_agent``   - look up an agent by key
+- ``find_case``   - locate (agent, testcase) by test id across all agents
 """
 
 from __future__ import annotations
@@ -10,24 +11,27 @@ from __future__ import annotations
 from core.agent import Agent
 from core.model import TestCase
 
-from .adversarial_agent import AGENT as ADVERSARIAL
-from .audit_agent import AGENT as AUDIT
-from .cloud_sandbox_agent import AGENT as CLOUD
-from .copilot_app_agent import AGENT as APP
-from .docker_sandbox_agent import AGENT as DOCKER
-from .governance_agent import AGENT as GOVERNANCE
-from .guardrail_agent import AGENT as GUARDRAIL
-from .local_sandbox_agent import AGENT as LOCAL
+from .data_protection import AGENT as DATA
+from .docker_baseline import AGENT as DOCKER
+from .functional import AGENT as FUNCTIONAL
+from .group1_identity import AGENT as GROUP1
+from .group2_containment import AGENT as GROUP2
+from .group3_code_assurance import AGENT as GROUP3
+from .group4_ai_threats import AGENT as GROUP4
+from .group5_mcp import AGENT as GROUP5
+from .group6_audit import AGENT as GROUP6
 
+# Group 2 (containment) + its Docker baseline first - set up first per request.
 ALL_AGENTS: list[Agent] = [
+    GROUP2,
     DOCKER,
-    LOCAL,
-    CLOUD,
-    APP,
-    GOVERNANCE,
-    GUARDRAIL,
-    ADVERSARIAL,
-    AUDIT,
+    GROUP1,
+    GROUP3,
+    GROUP4,
+    GROUP5,
+    GROUP6,
+    FUNCTIONAL,
+    DATA,
 ]
 
 

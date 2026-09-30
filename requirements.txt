@@ -1,3 +1,4 @@
 # The standalone runner (run_tests.py) and the sandbox package are stdlib-only.
 # pytest is only needed for the tests/ front-end.
 pytest>=9.1.1
+platformdirs==4.12.1
